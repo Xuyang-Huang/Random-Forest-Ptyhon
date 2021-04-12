@@ -400,33 +400,12 @@ def prepare_data(proportion):
 
 
 if __name__ == '__main__':
-    # minimum_leaf = 1
-    # train, val, num_class = prepare_data(0.8)
-    # num_try = int(np.sqrt(train[0].shape[1]))
-    # dt = DecisionTree(minimum_leaf, 'gini', pruning_prop=0.3, n_try=num_try)
-    # dt.train(train[0], train[1], num_class)
-    # _, _, train_acc = dt.eval(train[0], train[1])
-    # pred, pred_gt, val_acc = dt.eval(val[0], val[1])
-    # print('train_acc', train_acc)
-    # print('val_acc', val_acc)
-    from scipy.io import loadmat
-    train_data_path = '../MatDataset/car/car_Train.mat'
-    test_data_path = '../MatDataset/car/car_Test.mat'
-    all_acc = []
-    train = loadmat(train_data_path)
-    train_data = train['Data']
-    train_label = train['Label'].flatten()
-    test = loadmat(test_data_path)
-    test_data = test['Data']
-    test_label = test['Label'].flatten()
-    num_class = len(list(set(train_label)))
     minimum_leaf = 1
-    num_try = int(np.sqrt(train_data.shape[1]))
-    dt = DecisionTree(minimum_leaf, 'entropy', pruning_prop=0.3, n_try=num_try)
-    dt.train(train_data, train_label, num_class)
-    _, _, train_acc = dt.eval(train_data, train_label)
-    pred, pred_gt, val_acc = dt.eval(test_data, test_label)
+    train, val, num_class = prepare_data(0.8)
+    num_try = int(np.sqrt(train[0].shape[1]))
+    dt = DecisionTree(minimum_leaf, 'gini', pruning_prop=0.3, n_try=num_try)
+    dt.train(train[0], train[1], num_class)
+    _, _, train_acc = dt.eval(train[0], train[1])
+    pred, pred_gt, val_acc = dt.eval(val[0], val[1])
     print('train_acc', train_acc)
     print('val_acc', val_acc)
-    print([len(list(set(train_data[:, i]))) < 15 for i in range(train_data.shape[1])])
-

@@ -7,8 +7,7 @@
 
 import sklearn.datasets as sk_dataset
 import numpy as np
-from Machine_Learning.Cart_Decision_Tree_on_Continuous_Value_by_Recursion import CartDecisionTree
-from Machine_Learning.Decision_Tree import DecisionTree
+from Decision_Tree import DecisionTree
 import multiprocessing as mp
 import os
 
