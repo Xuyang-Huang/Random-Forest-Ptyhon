@@ -233,6 +233,8 @@ class DecisionTree:
                 return None
             _split_data, _split_data_index, _split_label = root.split_predict(_data, _index)
             for i in range(len(root.children_class)):
+                if len(_split_data[i]) == 0:
+                    break
                 if root.children[i] is None:
                     if len(_split_data[i]) != 0:
                         result[root.children_class[i]].extend(_split_data_index[i])
@@ -285,7 +287,7 @@ class Criterion:
         :param data: A 2-D Numpy array.
         :param label: A 1-D Numpy array.
         :param is_discrete_feature: A list of bool for all features if they are discrete or not.
-        :param n_try: An integer or None or string, if 'sqrt' use sqrt(n_feature), if 'log2' use log2(n_feature),
+        :param n_try: AAn integer or None or string, if 'sqrt' use sqrt(n_feature), if 'log2' use log2(n_feature),
             if None use all n_feature, if integer number of feature pick randomly.
         :return: Best feature to split, best threshold to split (unique value for discrete), is_discrete.        """
 
@@ -305,10 +307,11 @@ class Criterion:
         best_gini = np.inf
 
         for i in range(data.shape[1]):
-            _is_discrete = is_discrete_feature[i]
+            _is_discrete = is_discrete_feature[rand_feature_index[i]]
             if _is_discrete:
                 unique_values = np.unique(data[:, i])
-                tmp_gini_value = np.sum([np.sum(data[:, i] == _value) / len(data) * self.__gini(label[data[:, i] == _value]) for _value in unique_values])
+                tmp_gini_value = np.sum([np.sum(data[:, i] == _value) / len(data[:, i]) * self.__gini(label[data[:, i] == _value])
+                                        for _value in unique_values])
                 if tmp_gini_value < best_gini:
                     best_gini = tmp_gini_value
                     best_feature = rand_feature_index[i]
@@ -316,11 +319,11 @@ class Criterion:
                     best_unique_values = unique_values
             else:
                 sort_index = np.argsort(data[:, i])
-                sub_data = data[sort_index]
+                sub_data = data[sort_index, i]
                 sub_label = label[sort_index]
                 if data.shape[0] > 100:
                     sub_data = np.percentile(data[:, i], np.arange(100))
-                    sub_label = np.percentile(np.arange(len(sub_label)), np.arange(100)).astype(np.int32)
+                    sub_label = sub_label[np.percentile(np.arange(len(sub_label)), np.arange(100)).astype(np.int32)]
 
                 for j in range(1, len(sub_data)):
                     tmp_gini_value = j / len(sub_data) * self.__gini(sub_label[:j]) + \
@@ -362,20 +365,20 @@ class Criterion:
         else:
             rand_feature_index = np.arange(data.shape[1])
         for i in range(data.shape[1]):
-            _is_discrete = is_discrete_feature[i]
+            _is_discrete = is_discrete_feature[rand_feature_index[i]]
             if _is_discrete:
                 unique_values = np.unique(data[:, i])
                 tmp_gain = ent_before - np.sum([np.sum(data[:, i] == _value) / len(data) * self.__ent(label[data[:, i] == _value]) for _value in unique_values])
-                tmp_gain_ratio = tmp_gain / (-np.sum([np.sum(data[:, i] == _value) / len(data) * np.log2(np.sum(data[:, i] == _value) / len(data)) for _value in unique_values]) - 10e-5)
+                tmp_gain_ratio = tmp_gain / (-np.sum([np.sum(data[:, i] == _value) / len(data[:, i]) * np.log2(np.sum(data[:, i] == _value) / len(data[:, i])) for _value in unique_values]) - 10e-5)
                 [gain.append(tmp_gain) for _ in range(np.minimum(data.shape[0] - 1, 100 - 1))]
                 [gain_ratio.append(tmp_gain_ratio) for _ in range(np.minimum(data.shape[0] - 1, 100 - 1))]
             else:
                 sort_index = np.argsort(data[:, i])
                 sub_label = label[sort_index]
-                sub_data = data[sort_index]
+                sub_data = data[sort_index, i]
                 if data.shape[0] > 100:
                     sub_data = np.percentile(data[:, i], np.arange(100))
-                    sub_label = np.percentile(np.arange(len(sub_label)), np.arange(100)).astype(np.int32)
+                    sub_label = sub_label[np.percentile(np.arange(len(sub_label)), np.arange(100)).astype(np.int32)]
                 for j in range(1, len(sub_data)):
                     tmp_gain = ent_before - \
                                (j / len(sub_data) * self.__ent(sub_label[:j]) + (len(sub_data) - j) / len(sub_data) * self.__ent(sub_label[j:]))
@@ -396,6 +399,7 @@ class Criterion:
             sub_data = np.sort(data[:, mat_index[0]])
             best_thr = np.mean([sub_data[mat_index[1]], sub_data[mat_index[1] + 1]])
             return best_feature, best_thr, is_discrete_feature[best_feature]
+
 
     def __gini(self, label):
         _label_class = np.unique(label)
@@ -430,7 +434,8 @@ def prepare_data(proportion):
 if __name__ == '__main__':
     minimum_leaf = 1
     train, val, num_class = prepare_data(0.8)
-    dt = DecisionTree(minimum_leaf, 'gini', pruning_prop=0.3, n_try='sqrt')
+    num_try = int(np.sqrt(train[0].shape[1]))
+    dt = DecisionTree(minimum_leaf, 'gini', pruning_prop=0.3, n_try=num_try)
     dt.train(train[0], train[1], num_class)
     _, _, train_acc = dt.eval(train[0], train[1])
     pred, pred_gt, val_acc = dt.eval(val[0], val[1])
