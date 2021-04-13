@@ -22,7 +22,7 @@ class TreeNode:
         children: A list of children nodes.
         children_class: A list of children nodes class belonging.
         children_acc: A list of floating number,  children accuracy for pruning.
-        acc: A floating number, this node's accuracy.
+        acc: A floating number, this node's accuracy while pruning.
         is_discrete: A bool, if this node's feature is discrete.
         children_values: A list of unique value in this feature index.
         thr: A floating number of threshold to split the data.
@@ -62,6 +62,8 @@ class TreeNode:
 
         else:
             left_mask = data[:, self.feature_index] <= self.thr
+            if left_mask.all():
+                left_mask = data[:, self.feature_index] < self.thr
             right_mask = ~left_mask
 
             left_leaf_data = data[left_mask]
@@ -123,7 +125,8 @@ class DecisionTree:
         split_method: String, choose 'gini' or 'entropy'.
         __pruning_prop: A floating number, proportion of data number to prune DT.
         __pruning: Bool, if True prune the DT, or not.
-        __n_try: An integer, number of feature pick randomly.
+        __n_try: An integer or None or string, if 'sqrt' use sqrt(n_feature), if 'log2' use log2(n_feature),
+            if None use all n_feature, if integer number of feature pick randomly.
 
     """
     def __init__(self, min_leaf, split_method='gini', pruning_prop=None, n_try=None):
@@ -156,7 +159,7 @@ class DecisionTree:
                 data = data[int(len(data) * self.__pruning_prop):]
                 label = label[int(len(label) * self.__pruning_prop):]
 
-        is_discrete_feature = [len(list(set(data[:, i]))) <= 10 for i in range(data.shape[1])]
+        is_discrete_feature = [len(np.unique(data[:, i])) <= 10 for i in range(data.shape[1])]
 
         def grow(_data, _label):
             # Train single node.
@@ -169,7 +172,7 @@ class DecisionTree:
             for i in range(len(_split_data)):
                 _node.children_class.append(np.argmax(np.bincount(_split_label[i])))
                 _node.children_acc.append(None)
-                if not ((len(_split_label[i]) < self.__min_leaf) | (_split_label[i] == _split_label[i][0]).all()):
+                if not ((len(_split_label[i]) <= self.__min_leaf) | (_split_label[i] == _split_label[i][0]).all()):
                     _node.children.append(grow(_split_data[i], _split_label[i]))
                 else:
                     _node.children.append(None)
@@ -282,19 +285,29 @@ class Criterion:
         :param data: A 2-D Numpy array.
         :param label: A 1-D Numpy array.
         :param is_discrete_feature: A list of bool for all features if they are discrete or not.
-        :param n_try: An integer, number of feature pick randomly.
+        :param n_try: An integer or None or string, if 'sqrt' use sqrt(n_feature), if 'log2' use log2(n_feature),
+            if None use all n_feature, if integer number of feature pick randomly.
         :return: Best feature to split, best threshold to split (unique value for discrete), is_discrete.        """
+
+        if n_try == 'log2':
+            n_try = int(np.log2(data.shape[1]))
+        elif n_try == 'sqrt':
+            n_try = int(np.sqrt(data.shape[1]))
         if n_try is not None:
             rand_feature_index = np.arange(data.shape[1])
             np.random.shuffle(rand_feature_index)
             rand_feature_index = rand_feature_index[:n_try]
             data = data[:, rand_feature_index]
+        else:
+            rand_feature_index = np.arange(data.shape[1])
+
+
         best_gini = np.inf
 
         for i in range(data.shape[1]):
             _is_discrete = is_discrete_feature[i]
             if _is_discrete:
-                unique_values = list(set(data[:, i]))
+                unique_values = np.unique(data[:, i])
                 tmp_gini_value = np.sum([np.sum(data[:, i] == _value) / len(data) * self.__gini(label[data[:, i] == _value]) for _value in unique_values])
                 if tmp_gini_value < best_gini:
                     best_gini = tmp_gini_value
@@ -305,12 +318,16 @@ class Criterion:
                 sort_index = np.argsort(data[:, i])
                 sub_data = data[sort_index]
                 sub_label = label[sort_index]
-                for j in range(1, data.shape[0]):
-                    tmp_gini_value = j / len(data) * self.__gini(sub_label[:j]) + \
-                                         (len(data) - j) / len(data) * self.__gini(sub_label[j:])
+                if data.shape[0] > 100:
+                    sub_data = np.percentile(data[:, i], np.arange(100))
+                    sub_label = np.percentile(np.arange(len(sub_label)), np.arange(100)).astype(np.int32)
+
+                for j in range(1, len(sub_data)):
+                    tmp_gini_value = j / len(sub_data) * self.__gini(sub_label[:j]) + \
+                                         (len(sub_data) - j) / len(sub_data) * self.__gini(sub_label[j:])
                     if tmp_gini_value < best_gini:
                         best_gini = tmp_gini_value
-                        best_thr = np.mean([sub_data[j-1, i], sub_data[j, i]])
+                        best_thr = np.mean([sub_data[j-1], sub_data[j]])
                         best_feature = rand_feature_index[i]
                         is_discrete = False
         if is_discrete:
@@ -326,43 +343,54 @@ class Criterion:
         :param data: A 2-D Numpy array.
         :param label: A 1-D Numpy array.
         :param is_discrete_feature: A list of bool for all features if they are discrete or not.
-        :param n_try: An integer, number of feature pick randomly.
+        :param n_try: An integer or None or string, if 'sqrt' use sqrt(n_feature), if 'log2' use log2(n_feature),
+            if None use all n_feature, if integer number of feature pick randomly.
         :return: Best feature to split, best threshold to split (unique value for discrete), is_discrete.
         """
         gain = []
         gain_ratio = []
         ent_before = self.__ent(label)
+        if n_try == 'log2':
+            n_try = int(np.log2(data.shape[1]))
+        elif n_try == 'sqrt':
+            n_try = int(np.sqrt(data.shape[1]))
         if n_try is not None:
             rand_feature_index = np.arange(data.shape[1])
             np.random.shuffle(rand_feature_index)
             rand_feature_index = rand_feature_index[:n_try]
             data = data[:, rand_feature_index]
+        else:
+            rand_feature_index = np.arange(data.shape[1])
         for i in range(data.shape[1]):
             _is_discrete = is_discrete_feature[i]
             if _is_discrete:
-                unique_values = list(set(data[:, i]))
+                unique_values = np.unique(data[:, i])
                 tmp_gain = ent_before - np.sum([np.sum(data[:, i] == _value) / len(data) * self.__ent(label[data[:, i] == _value]) for _value in unique_values])
                 tmp_gain_ratio = tmp_gain / (-np.sum([np.sum(data[:, i] == _value) / len(data) * np.log2(np.sum(data[:, i] == _value) / len(data)) for _value in unique_values]) - 10e-5)
-                [gain.append(tmp_gain) for _ in range(data.shape[0]-1)]
-                [gain_ratio.append(tmp_gain_ratio) for _ in range(data.shape[0]-1)]
+                [gain.append(tmp_gain) for _ in range(np.minimum(data.shape[0] - 1, 100 - 1))]
+                [gain_ratio.append(tmp_gain_ratio) for _ in range(np.minimum(data.shape[0] - 1, 100 - 1))]
             else:
                 sort_index = np.argsort(data[:, i])
                 sub_label = label[sort_index]
-                for j in range(1, data.shape[0]):
+                sub_data = data[sort_index]
+                if data.shape[0] > 100:
+                    sub_data = np.percentile(data[:, i], np.arange(100))
+                    sub_label = np.percentile(np.arange(len(sub_label)), np.arange(100)).astype(np.int32)
+                for j in range(1, len(sub_data)):
                     tmp_gain = ent_before - \
-                               (j / len(data) * self.__ent(sub_label[:j]) + (len(data) - j) / len(data) * self.__ent(sub_label[j:]))
-                    tmp_gain_ratio = tmp_gain / (- j / len(data) * np.log2(j / len(data)) -
-                                                 (len(data) - j) / len(data) * np.log2((len(data) - j) / len(data)))
+                               (j / len(sub_data) * self.__ent(sub_label[:j]) + (len(sub_data) - j) / len(sub_data) * self.__ent(sub_label[j:]))
+                    tmp_gain_ratio = tmp_gain / (- j / len(sub_data) * np.log2(j / len(sub_data)) -
+                                                 (len(sub_data) - j) / len(sub_data) * np.log2((len(sub_data) - j) / len(sub_data)))
                     gain.append(tmp_gain)
                     gain_ratio.append(tmp_gain_ratio)
         gain = np.array(gain)
         gain_ratio = np.array(gain_ratio)
         gain_ratio[gain < np.mean(gain)] = -np.inf
         best_index = np.argmax(gain_ratio)
-        mat_index = np.unravel_index(best_index, [data.shape[1], data.shape[0] - 1])
+        mat_index = np.unravel_index(best_index, [data.shape[1], np.minimum(data.shape[0] - 1, 100 - 1)])
         best_feature = rand_feature_index[mat_index[0]]
         if is_discrete_feature[best_feature]:
-            best_unique_values = list(set(data[:, mat_index[0]]))
+            best_unique_values = np.unique(data[:, mat_index[0]])
             return best_feature, best_unique_values, is_discrete_feature[best_feature]
         else:
             sub_data = np.sort(data[:, mat_index[0]])
@@ -370,12 +398,12 @@ class Criterion:
             return best_feature, best_thr, is_discrete_feature[best_feature]
 
     def __gini(self, label):
-        _label_class = list(set(label))
+        _label_class = np.unique(label)
         gini_value = 1 - np.sum([(np.sum(label == i) / len(label)) ** 2 for i in _label_class])
         return gini_value
 
     def __ent(self, label):
-        _label_class = list(set(label))
+        _label_class = np.unique(label)
         ent_value = - np.sum([np.sum(label == i) / len(label) * np.log2(np.sum(label == i) / len(label)) for i in _label_class])
         return ent_value
 
@@ -402,10 +430,11 @@ def prepare_data(proportion):
 if __name__ == '__main__':
     minimum_leaf = 1
     train, val, num_class = prepare_data(0.8)
-    num_try = int(np.sqrt(train[0].shape[1]))
-    dt = DecisionTree(minimum_leaf, 'gini', pruning_prop=0.3, n_try=num_try)
+    dt = DecisionTree(minimum_leaf, 'gini', pruning_prop=0.3, n_try='sqrt')
     dt.train(train[0], train[1], num_class)
     _, _, train_acc = dt.eval(train[0], train[1])
     pred, pred_gt, val_acc = dt.eval(val[0], val[1])
     print('train_acc', train_acc)
     print('val_acc', val_acc)
+
+
