@@ -21,7 +21,7 @@ class RandomForest:
         tree: A list, stored all decision trees.
         __split_method: String, choose 'gini' or 'entropy'.
         __pruning_prop: A floating number, proportion of data number to prune DT.
-        __n_try: An integer or None or string, if 'sqrt' use sqrt(n_feature), if 'log2' use log2(n_feature),
+        __n_try: n_try: AAn integer or None or string, if 'sqrt' use sqrt(n_feature), if 'log2' use log2(n_feature),
             if None use all n_feature, if integer number of feature pick randomly.
 
     """
@@ -77,6 +77,7 @@ class RandomForest:
             dt.train(train[0], train[1], self.__n_class, val[0], val[1])
             if dt.root is not None:
                 sub_tree.append(dt)
+        print('finish pid:', os.getpid())
         return sub_tree
 
     def predict(self, data):
@@ -167,7 +168,8 @@ if __name__ == '__main__':
     num_tree = 50
 
     train, val, num_class = prepare_data(0.8)
-    rf = RandomForest(n_tree=num_tree, min_leaf=minimum_leaf, n_try='sqrt', split_method='entropy', pruning_prop=0.2)
+    num_try = int(np.sqrt(train[0].shape[1]))
+    rf = RandomForest(n_tree=num_tree, min_leaf=minimum_leaf, n_try=num_try, split_method='entropy', pruning_prop=0.2)
     rf.train(train[0], train[1], num_class, multi_processing=True)
     _, train_acc = rf.eval(train[0], train[1])
     pred, val_acc = rf.eval(val[0], val[1])
