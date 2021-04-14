@@ -64,6 +64,8 @@ class TreeNode:
             left_mask = data[:, self.feature_index] <= self.thr
             if left_mask.all():
                 left_mask = data[:, self.feature_index] < self.thr
+            if np.unique(data[:, self.feature_index]).__len__() == 1:
+                left_mask[:len(data)//2] = True
             right_mask = ~left_mask
 
             left_leaf_data = data[left_mask]
@@ -101,6 +103,10 @@ class TreeNode:
 
         else:
             left_mask = data[:, self.feature_index] <= self.thr
+            if left_mask.all():
+                left_mask = data[:, self.feature_index] < self.thr
+            if np.unique(data[:, self.feature_index]).__len__() == 1:
+                left_mask[:len(data)//2] = True
             right_mask = ~left_mask
 
             left_leaf_data = data[left_mask]
@@ -159,7 +165,7 @@ class DecisionTree:
                 data = data[int(len(data) * self.__pruning_prop):]
                 label = label[int(len(label) * self.__pruning_prop):]
 
-        is_discrete_feature = [len(np.unique(data[:, i])) <= 10 for i in range(data.shape[1])]
+        is_discrete_feature = [isinstance(item, str) for item in range(data.shape[1])]
 
         def grow(_data, _label):
             # Train single node.
@@ -400,13 +406,14 @@ class Criterion:
             best_thr = np.mean([sub_data[mat_index[1]], sub_data[mat_index[1] + 1]])
             return best_feature, best_thr, is_discrete_feature[best_feature]
 
-
-    def __gini(self, label):
+    @staticmethod
+    def __gini(label):
         _label_class = np.unique(label)
         gini_value = 1 - np.sum([(np.sum(label == i) / len(label)) ** 2 for i in _label_class])
         return gini_value
 
-    def __ent(self, label):
+    @staticmethod
+    def __ent(label):
         _label_class = np.unique(label)
         ent_value = - np.sum([np.sum(label == i) / len(label) * np.log2(np.sum(label == i) / len(label)) for i in _label_class])
         return ent_value
@@ -441,5 +448,3 @@ if __name__ == '__main__':
     pred, pred_gt, val_acc = dt.eval(val[0], val[1])
     print('train_acc', train_acc)
     print('val_acc', val_acc)
-
-

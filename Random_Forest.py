@@ -10,6 +10,7 @@ import numpy as np
 from Decision_Tree import DecisionTree
 import multiprocessing as mp
 import os
+import sys
 
 
 class RandomForest:
@@ -47,7 +48,7 @@ class RandomForest:
         if multi_processing:
             n_cores = mp.cpu_count() - 1
             p = mp.pool.Pool(n_cores)
-            results = [p.apply_async(self.train_mp, args=(data, label, self.__n_tree // n_cores)) for _ in range(n_cores)]
+            results = [p.apply_async(self.train_mp, args=(data, label, self.__n_tree // n_cores, _ == 0)) for _ in range(n_cores)]
             if self.__n_tree % n_cores != 0:
                 results.append(p.apply_async(self.train_mp, args=(data, label, self.__n_tree % n_cores)))
             results = [p.get() for p in results]
@@ -62,7 +63,7 @@ class RandomForest:
                 if dt.root is not None:
                     self.tree.append(dt)
 
-    def train_mp(self, data, label, n_tree):
+    def train_mp(self, data, label, n_tree, print_process=False):
         """Training on multi-processing.
 
         :param data: A 2-D Numpy array.
@@ -77,7 +78,9 @@ class RandomForest:
             dt.train(train[0], train[1], self.__n_class, val[0], val[1])
             if dt.root is not None:
                 sub_tree.append(dt)
-        print('finish pid:', os.getpid())
+            if print_process is True:
+                sys.stdout.write('\r'+'[%s%%]' % round(len(sub_tree)/n_tree * 100, 3))
+                sys.stdout.flush()
         return sub_tree
 
     def predict(self, data):
